@@ -26,8 +26,10 @@ public class UserServiceImpl implements UserService {
     public UserDto createUser(UserDto userDto) {
         Person user = userMapper.userDtoToPerson(userDto);
         log.info("Mapped user: {}", user);
+
         Person savedUser = userRepository.save(user);
         log.info("Saved user: {}", savedUser);
+
         return userMapper.personToUserDto(savedUser);
     }
 
@@ -40,15 +42,19 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new NotFoundException("No user with id: " + user.getId()));
         log.info("Check user in database: {}", personSource);
 
-        personSource.setFullName(user.getFullName());
-        personSource.setAge(user.getAge());
-        personSource.setTitle(user.getTitle());
+        mapperUserUpdate(user, personSource);
         log.info("Update user: {}", personSource);
 
         Person savedUser = userRepository.save(personSource);
         log.info("Saved user: {}", savedUser);
 
         return userMapper.personToUserDto(savedUser);
+    }
+
+    private void mapperUserUpdate(Person userUpdate, Person personSource) {
+        personSource.setFullName(userUpdate.getFullName());
+        personSource.setAge(userUpdate.getAge());
+        personSource.setTitle(userUpdate.getTitle());
     }
 
     @Override
@@ -63,7 +69,11 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void deleteUserById(Integer id) {
-        userRepository.deleteById(id);
-        log.info("Delete user with id: {}", id);
+        if (userRepository.existsById(id)) {
+            userRepository.deleteById(id);
+            log.info("Delete user with id: {}", id);
+        } else {
+            throw new NotFoundException("No user with id: " + id);
+        }
     }
 }
