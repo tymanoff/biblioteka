@@ -42,15 +42,19 @@ public class BookServiceImpl implements BookService {
         Book bookSource = bookRepository.findByIdForUpdate(book.getId())
                 .orElseThrow(() -> new NotFoundException("No book with id: " + book.getId()));
 
-        bookSource.setAuthor(book.getAuthor());  /// mapper
-        bookSource.setTitle(book.getTitle());
-        bookSource.setPageCount(book.getPageCount());
+        mapperBookUpdate(book, bookSource);
         log.debug("Update book: {}", bookSource);
 
         Book savedBook = bookRepository.save(bookSource);
         log.info("Saved book: {}", savedBook);
 
         return bookMapper.bookToBookDto(savedBook);
+    }
+
+    private void mapperBookUpdate(Book book, Book bookSource) {
+        bookSource.setAuthor(book.getAuthor());
+        bookSource.setTitle(book.getTitle());
+        bookSource.setPageCount(book.getPageCount());
     }
 
     @Override
@@ -63,12 +67,17 @@ public class BookServiceImpl implements BookService {
 
     @Override
     public void deleteBookById(Integer id) {
-        bookRepository.deleteById(id);
-        log.info("Delete book with id: {}", id);
+        if (bookRepository.existsById(id)) {
+            bookRepository.deleteById(id);
+            log.info("Delete book with id: {}", id);
+        } else {
+            throw new NotFoundException("No book with id: " + id);
+        }
     }
 
     @Override
     public List<BookDto> getAllBooks() {
+        log.info("Get all Books.");
         return bookMapper.booksToBookDtos(bookRepository.findAll());
     }
 }

@@ -2,6 +2,7 @@ package com.edu.ulab.app.facade;
 
 import com.edu.ulab.app.dto.BookDto;
 import com.edu.ulab.app.dto.UserDto;
+import com.edu.ulab.app.exception.NotFoundException;
 import com.edu.ulab.app.mapper.BookMapper;
 import com.edu.ulab.app.mapper.UserMapper;
 
@@ -22,8 +23,8 @@ import java.util.Objects;
 @Component
 @RequiredArgsConstructor
 public class UserDataFacade {
-    private final UserServiceImpl userService;
-    private final BookServiceImpl bookService;
+    private final UserServiceImplTemplate userService;
+    private final BookServiceImplTemplate bookService;
     private final UserMapper userMapper;
     private final BookMapper bookMapper;
 
@@ -55,42 +56,50 @@ public class UserDataFacade {
 
     public UserBookResponse updateUserWithBooks(UserBookRequest userBookRequest) {
         log.info("Got user book update request: {}", userBookRequest);
-
         UserDto userDto = userMapper.userRequestToUserDto(userBookRequest.getUserRequest());
         log.info("Mapped user request: {}", userDto);
 
-        getUserWithBooks(userDto.getId());
-        log.info("The user is in the database: {}", userDto);
-
-        UserDto updateUser = userService.updateUser(userDto);
-        log.info("Update user: {}", updateUser);
+        log.info("Check user in database: {}", userDto);
+        userService.getUserById(userDto.getId());
 
         List<BookDto> bookDtoList = bookMapper.bookRequestToBookDto(userBookRequest.getBookRequests());
         log.info("Mapped book request: {}", bookDtoList);
 
-        bookDtoList.forEach(book -> {
-            if (book.getId() == null) {
-                book.setUserId(userDto.getId());
-                log.info("Book set userId: {}", book);
+        log.info("Check books user in database which id: {}", bookDtoList);
+        bookDtoList.stream()
+                .filter(Objects::nonNull)
+                .filter(book -> book.getId() != null)
+                .forEach(book -> {
+                    BookDto bookDto = bookService.getBookById(book.getId());
+                    if (!Objects.equals(bookDto.getUserId(), userDto.getId())) {
+                        throw new NotFoundException("The user does not have a book with id: " + bookDto.getId());
+                    }
+                });
 
-                bookService.createBook(book);
-                log.info("Book create in database: {}", book);
-            } else {
-                log.info("Check book in database: {}", book.getId());
-                bookService.getBookById(book.getId());
+        UserDto updateUser = userService.updateUser(userDto);
+        log.info("Update user: {}", updateUser);
 
-                bookService.updateBook(book);
-                log.info("Book update: {}", book);
-            }
-        });
+        bookDtoList.stream()
+                .filter(Objects::nonNull)
+                .forEach(bookDto -> {
+                    if(bookDto.getId() == null){
+                        bookDto.setUserId(updateUser.getId());
+                        bookService.createBook(bookDto);
+                        log.info("Created book: {}", bookDto);
+                    } else {
+                        bookDto.setUserId(updateUser.getId());
+                        bookService.updateBook(bookDto);
+                        log.info("Update book: {}", bookDto);
+                    }
+                });
         log.info("Update book: {}", bookDtoList);
 
-        List<Integer> bookIdList = getAllBooksUser(userDto.getId());
-        log.info("Collected update book ids: {}", bookIdList);
+        List<Integer> allBooksUser = getAllBooksUser(updateUser.getId());
+        log.info("Collected update book ids: {}", allBooksUser);
 
         return UserBookResponse.builder()
                 .userId(updateUser.getId())
-                .booksIdList(bookIdList)
+                .booksIdList(allBooksUser)
                 .build();
     }
 
@@ -111,9 +120,6 @@ public class UserDataFacade {
 
     public void deleteUserWithBooks(Integer userId) {
         log.info("Got user and book delete request: {}", userId);
-
-        getUserWithBooks(userId);
-        log.info("The user is in the database: {}", userId);
 
         userService.deleteUserById(userId);
         log.info("Deleted user");
